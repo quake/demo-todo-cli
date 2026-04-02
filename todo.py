@@ -2,43 +2,29 @@
 """A simple command-line todo list manager."""
 
 import argparse
-import json
 import os
 import sys
+
+from storage import Storage, make_todo
 
 DEFAULT_FILE = os.path.join(os.path.expanduser("~"), ".todos.json")
 
 
-def load_todos(filepath):
-    """Load todos from a JSON file."""
-    if not os.path.exists(filepath):
-        return []
-    with open(filepath, "r") as f:
-        content = f.read().strip()
-        if not content:
-            return []
-        return json.loads(content)
-
-
-def save_todos(filepath, todos):
-    """Save todos to a JSON file."""
-    with open(filepath, "w") as f:
-        json.dump(todos, f, indent=2)
-
-
 def cmd_add(args):
     """Add a new todo item."""
-    todos = load_todos(args.file)
+    store = Storage(args.file)
+    todos = store.load()
     next_id = max((t["id"] for t in todos), default=0) + 1
-    todo = {"id": next_id, "title": args.title, "done": False}
+    todo = make_todo(next_id, args.title)
     todos.append(todo)
-    save_todos(args.file, todos)
+    store.save(todos)
     print(f"Added todo #{next_id}: {args.title}")
 
 
 def cmd_list(args):
     """List all todo items."""
-    todos = load_todos(args.file)
+    store = Storage(args.file)
+    todos = store.load()
     if not todos:
         print("No todos found.")
         return
@@ -49,11 +35,12 @@ def cmd_list(args):
 
 def cmd_done(args):
     """Mark a todo item as done."""
-    todos = load_todos(args.file)
+    store = Storage(args.file)
+    todos = store.load()
     for t in todos:
         if t["id"] == args.id:
             t["done"] = True
-            save_todos(args.file, todos)
+            store.save(todos)
             print(f"Marked todo #{args.id} as done.")
             return
     print(f"Todo #{args.id} not found.", file=sys.stderr)
@@ -62,13 +49,14 @@ def cmd_done(args):
 
 def cmd_delete(args):
     """Delete a todo item by its ID."""
-    todos = load_todos(args.file)
+    store = Storage(args.file)
+    todos = store.load()
     original_len = len(todos)
     todos = [t for t in todos if t["id"] != args.id]
     if len(todos) == original_len:
         print(f"Todo #{args.id} not found.", file=sys.stderr)
         sys.exit(1)
-    save_todos(args.file, todos)
+    store.save(todos)
     print(f"Deleted todo #{args.id}.")
 
 
