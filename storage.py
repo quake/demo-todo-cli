@@ -28,19 +28,20 @@ class Storage:
         Returns an empty list if the file doesn't exist or is empty.
         Raises ValueError if the file contains invalid JSON.
         """
-        if not os.path.exists(self.filepath):
+        try:
+            with open(self.filepath, "r") as f:
+                content = f.read().strip()
+        except FileNotFoundError:
             return []
-        with open(self.filepath, "r") as f:
-            content = f.read().strip()
-            if not content:
-                return []
-            data = json.loads(content)
-            if not isinstance(data, list):
-                raise ValueError(
-                    f"Expected a JSON array in {self.filepath}, "
-                    f"got {type(data).__name__}"
-                )
-            return data
+        if not content:
+            return []
+        data = json.loads(content)
+        if not isinstance(data, list):
+            raise ValueError(
+                f"Expected a JSON array in {self.filepath}, "
+                f"got {type(data).__name__}"
+            )
+        return data
 
     def save(self, todos):
         """Save todos to the JSON file using atomic write.

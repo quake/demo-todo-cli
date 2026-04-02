@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import tempfile
 import unittest
 
@@ -15,9 +16,7 @@ class TestStorage(unittest.TestCase):
         self.store = Storage(self.filepath)
 
     def tearDown(self):
-        if os.path.exists(self.filepath):
-            os.unlink(self.filepath)
-        os.rmdir(self.tmpdir)
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_load_nonexistent_file_returns_empty(self):
         self.assertEqual(self.store.load(), [])
@@ -41,10 +40,6 @@ class TestStorage(unittest.TestCase):
         store.save([make_todo(1, "Test")])
         loaded = store.load()
         self.assertEqual(len(loaded), 1)
-        # Cleanup nested dirs
-        os.unlink(nested_path)
-        os.rmdir(os.path.join(self.tmpdir, "sub", "dir"))
-        os.rmdir(os.path.join(self.tmpdir, "sub"))
 
     def test_save_atomic_no_temp_files_left(self):
         self.store.save([make_todo(1, "Test")])
@@ -69,6 +64,19 @@ class TestStorage(unittest.TestCase):
         with open(self.filepath, "r") as f:
             content = f.read()
         self.assertTrue(content.endswith("\n"))
+
+    def test_save_overwrites_existing_file(self):
+        self.store.save([make_todo(1, "First")])
+        self.store.save([make_todo(2, "Second")])
+        loaded = self.store.load()
+        self.assertEqual(len(loaded), 1)
+        self.assertEqual(loaded[0]["title"], "Second")
+
+    def test_save_empty_list_and_load(self):
+        self.store.save([make_todo(1, "Temp")])
+        self.store.save([])
+        loaded = self.store.load()
+        self.assertEqual(loaded, [])
 
 
 class TestMakeTodo(unittest.TestCase):
