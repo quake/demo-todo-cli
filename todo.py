@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 
 DEFAULT_FILE = os.path.join(os.path.expanduser("~"), ".todos.json")
 
@@ -42,9 +43,15 @@ def cmd_list(args):
     if not todos:
         print("No todos found.")
         return
+    now = datetime.now()
     for t in todos:
         status = "x" if t["done"] else " "
-        print(f"  [{status}] #{t['id']}  {t['title']}")
+        reminder_str = ""
+        if t.get("reminder") and not t["done"]:
+            reminder_dt = datetime.fromisoformat(t["reminder"])
+            overdue = " OVERDUE" if reminder_dt <= now else ""
+            reminder_str = f"  [remind: {reminder_dt.strftime('%Y-%m-%d %H:%M')}{overdue}]"
+        print(f"  [{status}] #{t['id']}  {t['title']}{reminder_str}")
 
 
 def cmd_done(args):
@@ -72,6 +79,57 @@ def cmd_delete(args):
     print(f"Deleted todo #{args.id}.")
 
 
+def cmd_remind(args):
+    """Set a reminder datetime on a todo item."""
+    if not args.clear and args.datetime is None:
+        print(
+            "Please provide a datetime in 'YYYY-MM-DD HH:MM' format, or use --clear.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    todos = load_todos(args.file)
+    for t in todos:
+        if t["id"] == args.id:
+            if args.clear:
+                t.pop("reminder", None)
+                save_todos(args.file, todos)
+                print(f"Cleared reminder for todo #{args.id}.")
+                return
+            try:
+                reminder_dt = datetime.strptime(args.datetime, "%Y-%m-%d %H:%M")
+            except ValueError:
+                print(
+                    "Invalid datetime format. Use 'YYYY-MM-DD HH:MM'.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            t["reminder"] = reminder_dt.isoformat()
+            save_todos(args.file, todos)
+            print(
+                f"Set reminder for todo #{args.id}: {reminder_dt.strftime('%Y-%m-%d %H:%M')}"
+            )
+            return
+    print(f"Todo #{args.id} not found.", file=sys.stderr)
+    sys.exit(1)
+
+
+def cmd_reminders(args):
+    """List todos that have reminders, highlighting overdue ones."""
+    todos = load_todos(args.file)
+    reminders = [t for t in todos if t.get("reminder") and not t["done"]]
+    if not reminders:
+        print("No upcoming reminders.")
+        return
+    now = datetime.now()
+    reminders.sort(key=lambda t: t["reminder"])
+    for t in reminders:
+        reminder_dt = datetime.fromisoformat(t["reminder"])
+        overdue = " [OVERDUE]" if reminder_dt <= now else ""
+        print(
+            f"  [ ] #{t['id']}  {t['title']}  -- reminder: {reminder_dt.strftime('%Y-%m-%d %H:%M')}{overdue}"
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description="A simple todo list manager.")
     parser.add_argument(
@@ -96,6 +154,26 @@ def main():
     delete_parser = subparsers.add_parser("delete", help="Delete a todo")
     delete_parser.add_argument("id", type=int, help="ID of the todo to delete")
 
+    # remind
+    remind_parser = subparsers.add_parser(
+        "remind", help="Set a reminder on a todo"
+    )
+    remind_parser.add_argument(
+        "id", type=int, help="ID of the todo to set a reminder for"
+    )
+    remind_parser.add_argument(
+        "datetime",
+        nargs="?",
+        default=None,
+        help="Reminder datetime in 'YYYY-MM-DD HH:MM' format",
+    )
+    remind_parser.add_argument(
+        "--clear", action="store_true", help="Clear the reminder from the todo"
+    )
+
+    # reminders
+    subparsers.add_parser("reminders", help="List todos with upcoming reminders")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -107,6 +185,8 @@ def main():
         "list": cmd_list,
         "done": cmd_done,
         "delete": cmd_delete,
+        "remind": cmd_remind,
+        "reminders": cmd_reminders,
     }
     commands[args.command](args)
 
