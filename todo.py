@@ -37,14 +37,28 @@ def cmd_add(args):
 
 
 def cmd_list(args):
-    """List all todo items."""
+    """List all todo items, optionally filtered by status."""
     todos = load_todos(args.file)
     if not todos:
         print("No todos found.")
         return
+
+    if args.done:
+        todos = [t for t in todos if t["done"]]
+    elif args.pending:
+        todos = [t for t in todos if not t["done"]]
+
+    if not todos:
+        print("No matching todos found.")
+        return
+
     for t in todos:
         status = "x" if t["done"] else " "
         print(f"  [{status}] #{t['id']}  {t['title']}")
+
+    done_count = sum(1 for t in todos if t["done"])
+    pending_count = len(todos) - done_count
+    print(f"\n  {len(todos)} todo(s): {done_count} done, {pending_count} pending")
 
 
 def cmd_done(args):
@@ -86,7 +100,10 @@ def main():
     add_parser.add_argument("title", help="Title of the todo item")
 
     # list
-    subparsers.add_parser("list", help="List all todos")
+    list_parser = subparsers.add_parser("list", help="List all todos")
+    list_filter = list_parser.add_mutually_exclusive_group()
+    list_filter.add_argument("--done", action="store_true", help="Show only completed todos")
+    list_filter.add_argument("--pending", action="store_true", help="Show only pending todos")
 
     # done
     done_parser = subparsers.add_parser("done", help="Mark a todo as done")
